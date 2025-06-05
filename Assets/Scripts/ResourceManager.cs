@@ -1,69 +1,218 @@
-using System.Collections;
-using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
+using System.Collections.Generic;
+using System;
 
 public class ResourceManager : MonoBehaviour
 {
-    public int resource1 = 0;           // Текущие единицы ресурса 1
-    public int resource2 = 500;         // Текущие единицы ресурса 2
-    public bool autoCollectorPurchased = false; // Флаг, показывающий, куплена ли система авто-сбора
-    public float autoCollectionInterval = 5f;    // Интервал авто-сбора в секундах
-    public int autoCollectionAmount = 1;        // Количество ресурса 1, добавляемое при авто-сборе
-    public int purchaseCost = 100;              // Стоимость покупки авто-системы сбора
+    public static ResourceManager Instance;
 
-    private float nextAutoCollectionTime;       // Время следующего авто-сбора
-
-    void Start()
+    [System.Serializable]
+    public class ResourceUI
     {
-        nextAutoCollectionTime = Time.time + autoCollectionInterval;
+        public ResourceType resourceType;
+        public TMP_Text resourceText;
+        public string displayFormat = "{0}";
+    }
+
+    public List<ResourceUI> resourceUIs = new List<ResourceUI>();
+
+    [Header("Ransom Settings")]
+    public int ransomAmount = 1000;
+    public ResourceType ransomCurrency = ResourceType.Coin;
+    public event Action<bool> OnRansomAvailabilityChanged;
+
+    private Dictionary<ResourceType, int> resources = new Dictionary<ResourceType, int>();
+    private Dictionary<ResourceType, float> productionMultipliers = new Dictionary<ResourceType, float>();
+    private Dictionary<ResourceType, float> autoProductionRates = new Dictionary<ResourceType, float>();
+    private Dictionary<ResourceType, float> productionAccumulators = new Dictionary<ResourceType, float>();
+
+    public event Action<ResourceType> OnResourceChanged;
+
+    void Awake()
+    {
+        if (Instance == null)
+        {
+            Instance = this;
+            InitializeResources();
+            DontDestroyOnLoad(gameObject);
+        }
+        else
+        {
+            Destroy(gameObject);
+        }
+    }
+
+    private void InitializeResources()
+    {
+        foreach (ResourceType type in Enum.GetValues(typeof(ResourceType)))
+        {
+            resources[type] = 0;
+            productionMultipliers[type] = 1f;
+            autoProductionRates[type] = 0f;
+            productionAccumulators[type] = 0f;
+            UpdateResourceText(type);
+        }
+
+        // Проверяем доступность выкупа при инициализации
+        CheckRansomAvailability();
     }
 
     void Update()
     {
-        if (autoCollectorPurchased && Time.time >= nextAutoCollectionTime)
+        // Обработка автодобычи
+        foreach (ResourceType type in Enum.GetValues(typeof(ResourceType)))
         {
-            CollectResource1(autoCollectionAmount); // Собираем ресурс 1
-            nextAutoCollectionTime = Time.time + autoCollectionInterval; // Обновляем время следующего сбора
+            if (autoProductionRates[type] > 0)
+            {
+                productionAccumulators[type] += autoProductionRates[type] * Time.deltaTime;
+
+                if (productionAccumulators[type] >= 1)
+                {
+                    int amountToAdd = Mathf.FloorToInt(productionAccumulators[type]);
+                    AddResource(type, amountToAdd);
+                    productionAccumulators[type] -= amountToAdd;
+                }
+            }
         }
     }
 
-    // Метод для покупки авто-системы сбора
-    public void PurchaseAutoCollector()
+    public void AddResource(ResourceType type, int amount)
     {
-        if (resource2 >= purchaseCost)
+        resources[type] += amount;
+        UpdateResourceText(type);
+        OnResourceChanged?.Invoke(type);
+
+        // Проверяем доступность выкупа при изменении ресурсов
+        if (type == ransomCurrency)
         {
-            resource2 -= purchaseCost;          // Снимаем стоимость покупки
-            autoCollectorPurchased = true;      // Включаем авто-сбор
-            Debug.Log("Auto collector purchased!");
+            CheckRansomAvailability();
+        }
+    }
+
+    private void CheckRansomAvailability()
+    {
+        bool isAvailable = CanAffordRansom();
+        OnRansomAvailabilityChanged?.Invoke(isAvailable);
+    }
+
+    public bool CanAffordRansom()
+    {
+        return GetResourceCount(ransomCurrency) >= ransomAmount;
+    }
+
+    public bool PayRansom()
+    {
+        if (!CanAffordRansom()) return false;
+
+        SpendResources(ransomCurrency, ransomAmount);
+        return true;
+    }
+
+    public float GetProductionMultiplier(ResourceType type)
+    {
+        return productionMultipliers.ContainsKey(type) ? productionMultipliers[type] : 1f;
+    }
+
+    public void AddProductionMultiplier(ResourceType type, float multiplier)
+    {
+        if (productionMultipliers.ContainsKey(type))
+        {
+            productionMultipliers[type] += multiplier;
         }
         else
         {
-            Debug.Log("Not enough resource 2 to purchase the auto collector.");
+            productionMultipliers[type] = 1f + multiplier;
         }
     }
 
-    // Метод для ручного сбора ресурса 1
-    public void CollectResource1(int amount)
+    public void SetAutoProductionRate(ResourceType type, float ratePerSecond)
     {
-        resource1 += amount;
-        Debug.Log($"Collected {amount} units of resource 1. Total: {resource1}");
+        if (autoProductionRates.ContainsKey(type))
+        {
+            autoProductionRates[type] = ratePerSecond;
+        }
+        else
+        {
+            autoProductionRates[type] = ratePerSecond;
+        }
     }
 
-    // Метод для проверки наличия достаточного количества ресурса 2 для покупки авто-системы
-    public bool CanPurchaseAutoCollector()
+    public float GetAutoProductionRate(ResourceType type)
     {
-        return resource2 >= purchaseCost;
+        return autoProductionRates.ContainsKey(type) ? autoProductionRates[type] : 0f;
     }
 
-    // Методы для получения текущих значений ресурсов
-    public int GetResource1()
+    public int GetResourceCount(ResourceType type)
     {
-        return resource1;
+        return resources.ContainsKey(type) ? resources[type] : 0;
     }
 
-    public int GetResource2()
+    public bool CanAfford(ResourceType type, int amount)
     {
-        return resource2;
+        return GetResourceCount(type) >= amount;
+    }
+
+    public void SpendResources(ResourceType type, int amount)
+    {
+        if (CanAfford(type, amount))
+        {
+            resources[type] -= amount;
+            UpdateResourceText(type);
+            OnResourceChanged?.Invoke(type);
+
+            if (type == ransomCurrency)
+            {
+                CheckRansomAvailability();
+            }
+        }
+    }
+
+    public bool TradeResources(ResourceType sellResource, int sellAmount, ResourceType buyResource, int buyAmount)
+    {
+        if (!CanAfford(sellResource, sellAmount)) return false;
+
+        SpendResources(sellResource, sellAmount);
+        AddResource(buyResource, buyAmount);
+        return true;
+    }
+
+    private void UpdateResourceText(ResourceType type)
+    {
+        foreach (var resourceUI in resourceUIs)
+        {
+            if (resourceUI.resourceType == type)
+            {
+                resourceUI.resourceText.text = string.Format(
+                    resourceUI.displayFormat,
+                    resources[type]
+                );
+                return;
+            }
+        }
+    }
+
+    public void ResetAll()
+    {
+        foreach (ResourceType type in Enum.GetValues(typeof(ResourceType)))
+        {
+            resources[type] = 0;
+            productionMultipliers[type] = 1f;
+            autoProductionRates[type] = 0f;
+            productionAccumulators[type] = 0f;
+            UpdateResourceText(type);
+        }
+
+        // Проверяем доступность выкупа после сброса
+        CheckRansomAvailability();
+    }
+
+    // Для дебага
+    public void DebugAddResources(int amount)
+    {
+        foreach (ResourceType type in Enum.GetValues(typeof(ResourceType)))
+        {
+            AddResource(type, amount);
+        }
     }
 }
-

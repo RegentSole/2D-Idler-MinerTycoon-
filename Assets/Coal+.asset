@@ -1,0 +1,22 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f03c77018dd9d4e58a3cffc41d6fd42f, type: 3}
+  m_Name: Coal+
+  m_EditorClassIdentifier: 
+  targetResource: 0
+  currencyResource: 1
+  upgradeName: "\u0414\u043E\u0431\u044B\u0447\u0430 \u0443\u0433\u043B\u044F+"
+  description: "\u0414\u043E\u0431\u044B\u0432\u0430\u0439\u0442\u0435 \u0431\u043E\u043B\u044C\u0448\u0435
+    \u0443\u0433\u043B\u044F"
+  baseCost: 10
+  costMultiplier: 1.5
+  productionBonusPerLevel: 1
