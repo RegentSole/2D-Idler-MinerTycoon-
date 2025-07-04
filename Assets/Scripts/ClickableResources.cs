@@ -1,5 +1,6 @@
 using UnityEngine;
 using System.Collections;
+using System.Collections.Generic;
 
 public class ClickableResource : MonoBehaviour
 {
@@ -19,7 +20,7 @@ public class ClickableResource : MonoBehaviour
     public float particleSizeMultiplier = 1f;
     public int minParticles = 5;
     public int maxParticles = 10;
-    public float particleZOffset = -0.1f; // Смещение по Z для правильного отображения
+    public float particleZOffset = -0.1f;
 
     [Header("Sound Settings")]
     public AudioClip clickSound;
@@ -34,6 +35,7 @@ public class ClickableResource : MonoBehaviour
     private bool isAnimating = false;
     private ParticlePool particlePool;
     private AudioSource audioSource;
+    private Camera activeCamera; // Используем общее название вместо mainCamera
 
     void Start()
     {
@@ -42,6 +44,9 @@ public class ClickableResource : MonoBehaviour
         // Save original state
         originalScale = transform.localScale;
         originalColor = spriteRenderer.color;
+
+        // Find and cache camera
+        CacheActiveCamera();
 
         particlePool = ParticlePool.Instance;
 
@@ -58,41 +63,59 @@ public class ClickableResource : MonoBehaviour
         InitializeAudio();
     }
 
+    void Update()
+    {
+        // Проверяем камеру каждый кадр, если она была уничтожена
+        if (activeCamera == null || !activeCamera.enabled || !activeCamera.gameObject.activeInHierarchy)
+        {
+            CacheActiveCamera();
+        }
+    }
+
+    private void CacheActiveCamera()
+    {
+        // Поиск первой активной камеры в сцене
+        Camera[] allCameras = FindObjectsOfType<Camera>();
+        foreach (Camera cam in allCameras)
+        {
+            if (cam.enabled && cam.gameObject.activeInHierarchy)
+            {
+                activeCamera = cam;
+                Debug.Log($"Using camera: {cam.name}");
+                return;
+            }
+        }
+
+        // Если камеры не найдены
+        Debug.LogError("No active cameras found in scene!");
+        activeCamera = null;
+    }
+
     private void InitializeAudio()
     {
-        // Try to get existing AudioSource
         audioSource = GetComponent<AudioSource>();
-
-        // Create new if doesn't exist
         if (audioSource == null)
         {
             audioSource = gameObject.AddComponent<AudioSource>();
         }
-
-        // Configure audio source
         audioSource.playOnAwake = false;
-        audioSource.spatialBlend = 0f; // 2D sound
+        audioSource.spatialBlend = 0f;
         audioSource.volume = soundVolume;
     }
 
     void OnMouseDown()
     {
-        if (isAnimating) return;
+        if (isAnimating || activeCamera == null) return;
 
-        // Play sound first
         PlayClickSound();
 
-        // Apply production multiplier
         float multiplier = ResourceManager.Instance.GetProductionMultiplier(resourceType);
         int totalAmount = Mathf.RoundToInt(amountPerClick * multiplier);
 
-        // Add resource
         ResourceManager.Instance.AddResource(resourceType, totalAmount);
 
-        // Play effects
         StartCoroutine(PulseAnimation());
 
-        // Play particles at click position
         if (clickParticlesPrefab != null && particlePool != null)
         {
             Vector3 clickPosition = GetClickWorldPosition();
@@ -104,7 +127,6 @@ public class ClickableResource : MonoBehaviour
     {
         if (clickSound == null || audioSource == null) return;
 
-        // Apply pitch variation if enabled
         if (randomPitch)
         {
             audioSource.pitch = soundPitch * Random.Range(1f - pitchRandomRange, 1f + pitchRandomRange);
@@ -115,23 +137,25 @@ public class ClickableResource : MonoBehaviour
         }
 
         audioSource.PlayOneShot(clickSound, soundVolume);
-
-        // Reset pitch for future sounds
         audioSource.pitch = 1f;
     }
 
-    // Получаем мировые координаты клика на объекте
     private Vector3 GetClickWorldPosition()
     {
+        if (activeCamera == null)
+        {
+            Debug.LogError("Active camera not available! Using object position.");
+            return transform.position;
+        }
+
         Vector3 mousePosition = Input.mousePosition;
 
-        // Для 2D объектов: преобразуем позицию мыши в мировые координаты
-        Vector3 worldPosition = Camera.main.ScreenToWorldPoint(
-            new Vector3(mousePosition.x, mousePosition.y,
-            Mathf.Abs(Camera.main.transform.position.z))
+        // Для 2D: используем ScreenToWorldPoint с глубиной = расстоянию до камеры
+        float cameraDistance = Mathf.Abs(activeCamera.transform.position.z - transform.position.z);
+        Vector3 worldPosition = activeCamera.ScreenToWorldPoint(
+            new Vector3(mousePosition.x, mousePosition.y, cameraDistance)
         );
 
-        // Добавляем смещение по Z для правильного отображения
         return new Vector3(worldPosition.x, worldPosition.y, transform.position.z + particleZOffset);
     }
 
@@ -176,7 +200,6 @@ public class ClickableResource : MonoBehaviour
             yield return null;
         }
 
-        // Ensure we return to original state
         transform.localScale = originalScale;
         if (spriteRenderer != null)
         {
@@ -185,31 +208,24 @@ public class ClickableResource : MonoBehaviour
         isAnimating = false;
     }
 
-    // Обновлённый метод: спавнит партиклы в указанной позиции
     private void PlayParticleEffect(Vector3 position)
     {
-        // Get particle system from pool
         ParticleSystem particleSystem = particlePool.GetParticleSystem();
         if (particleSystem == null) return;
 
-        // Position at click location
         particleSystem.transform.position = position;
 
-        // Configure particles
         var main = particleSystem.main;
         main.startColor = particleColor;
         main.startSize = Random.Range(0.1f, 0.3f) * particleSizeMultiplier;
 
-        // Set particle count
         var emission = particleSystem.emission;
         emission.SetBurst(0, new ParticleSystem.Burst(0f, Random.Range(minParticles, maxParticles)));
 
-        // Play and return to pool
         particleSystem.Play();
         particlePool.StartReturnTimer(particleSystem, main.duration);
     }
 
-    // For debugging in editor
     void OnDrawGizmosSelected()
     {
         Gizmos.color = Color.green;
@@ -261,7 +277,6 @@ public class ParticlePool : MonoBehaviour
 
     public ParticleSystem GetParticleSystem()
     {
-        // Ensure pool is initialized
         if (particlePool == null || particlePool.Length == 0)
         {
             if (particlePrefab == null)
@@ -283,7 +298,6 @@ public class ParticlePool : MonoBehaviour
             }
         }
 
-        // If all particles are in use, expand pool
         ExpandPool(5);
         return GetParticleSystem();
     }
