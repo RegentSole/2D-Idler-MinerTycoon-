@@ -254,7 +254,7 @@ GameObject:
   - component: {fileID: 519420029}
   m_Layer: 0
   m_Name: Main Camera
-  m_TagString: MainCamera
+  m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -344,11 +344,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f4688fdb7df04437aeb418b961361dc5, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
---- !u!198 &549248630 stripped
-ParticleSystem:
-  m_CorrespondingSourceObject: {fileID: 4244687506331993374, guid: bf0e07379f05a4d1db0272f4078f12a9, type: 3}
-  m_PrefabInstance: {fileID: 2793599279960292688}
-  m_PrefabAsset: {fileID: 0}
 --- !u!4 &583023769 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 4078927079777626949, guid: ddfcd8e6219ef451ead36b266e0fd66b, type: 3}
@@ -639,7 +634,7 @@ PrefabInstance:
     - target: {fileID: 942762921262008238, guid: ddfcd8e6219ef451ead36b266e0fd66b, type: 3}
       propertyPath: clickParticlesPrefab
       value: 
-      objectReference: {fileID: 549248630}
+      objectReference: {fileID: 4244687506331993374, guid: bf0e07379f05a4d1db0272f4078f12a9, type: 3}
     - target: {fileID: 4078927079777626949, guid: ddfcd8e6219ef451ead36b266e0fd66b, type: 3}
       propertyPath: m_LocalPosition.x
       value: -1.06
